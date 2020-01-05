@@ -13,14 +13,17 @@ if not os.path.isdir(CACHE):
 
 
 class StravaFile(FitFile):
-    def __init__(self, file):
+    def __init__(self, filename, file):
         super().__init__(file)
+        self.filename = filename
         self.session_data = self._get_session_data()
 
     def _get_session_data(self):
         session_data = list(self.get_messages("session"))
         if len(session_data) != 1:
-            raise AssertionError("Expected only 1 session record per file!")
+            #raise AssertionError("Expected only 1 session record per file!")
+            print("Expected only 1 session record per file. {} has {} sessions".format(self.filename, len(session_data)) )
+            return None
         return {j["name"]: j["value"] for j in session_data[0].as_dict()["fields"]}
 
     def location(self):
@@ -84,14 +87,16 @@ def get_files(zip_path):
         good_files = [f for f in run_zip.namelist() if pattern.match(f)]
         for filename in tqdm.tqdm(good_files):
             with run_zip.open(filename) as buff:
-                yield gzip.decompress(buff.read())
+                yield filename, gzip.decompress(buff.read())
 
 
 def filter_files(zip_path, filters):
-    for data in get_files(zip_path):
-        strava_file = StravaFile(data)
-        if all(f(strava_file) for f in filters):
-            yield strava_file
+    for filename, data in get_files(zip_path):
+        strava_file = StravaFile(filename, data)
+        if strava_file is not None:
+            if strava_file.session_data is not None:
+                if all(f(strava_file) for f in filters):
+                    yield strava_file
 
 
 def get_data(zip_path, sport, start_date, end_date):
